@@ -65,14 +65,6 @@
 
 extern volatile sDemo_t Demo;
 
-#if 0
-#include "xi2srx.h"
-
-static XI2s_Rx i2s;
-
-#define I2S_DEVICE_ID XPAR_XI2SRX_0_DEVICE_ID
-#endif
-
 /******************************************************************************
  * Function to write one byte (8-bits) to one of the registers from the audio
  * controller.

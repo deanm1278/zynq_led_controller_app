@@ -32,6 +32,7 @@
 #include "intc/intc.h"
 #include "userio/userio.h"
 #include "iic/iic.h"
+#include "vis.h"
 
 /***************************** Include Files *********************************/
 
@@ -43,6 +44,7 @@
 #include "xaxidma.h"
 #include "xtime_l.h"
 
+#include "NE10.h"
 
 #ifdef XPAR_INTC_0_DEVICE_ID
  #include "xintc.h"
@@ -52,19 +54,6 @@
 #include "sleep.h"
 #include "xil_cache.h"
 #endif
-
-/************************** Constant Definitions *****************************/
-#define NUM_LED_CHANNELS 8
-#define B_OFFSET 24
-#define R_OFFSET 16
-#define G_OFFSET 8
-
-#define BLUE(_x) ((uint32_t)(_x & 0xFF) << B_OFFSET)
-#define RED(_x) ((uint32_t)(_x & 0xFF) << R_OFFSET)
-#define GREEN(_x) ((uint32_t)(_x & 0xFF) << G_OFFSET)
-
-/**************************** Type Definitions *******************************/
-typedef uint32_t Color_t;
 
 /***************** Macros (Inline Functions) Definitions *********************/
 
@@ -82,7 +71,7 @@ extern void xil_printf(const char *format, ...);
 
 static XIic sIic;
 static XAxiDma sAxiDma;		/* Instance of the XAxiDma */
-static XAxiDma sAxiDma1;
+XAxiDma sAxiDma1;
 static XGpio sUserIO;
 static XScuGic sIntc;
 
@@ -99,33 +88,7 @@ const ivt_t ivt[] = {
 	{XPAR_FABRIC_AXI_GPIO_0_IP2INTC_IRPT_INTR, (Xil_ExceptionHandler)fnUserIOIsr, &sUserIO}
 };
 
-Color_t color(int r, int g, int b){
-	return RED(r) | GREEN(g) | BLUE(b);
-}
 
-static void writeLeds(uint32_t *addr, uint32_t numpix)
-{
-	union ubitField uTransferVariable;
-
-	if (Demo.u8Verbose)
-	{
-		xil_printf("\r\nEnter writeleds");
-	}
-
-	Xil_DCacheFlushRange((u32) addr, numpix*sizeof(uint32_t));
-
-	uTransferVariable.l = XAxiDma_SimpleTransfer(&sAxiDma1,(u32) addr, numpix*sizeof(uint32_t), XAXIDMA_DMA_TO_DEVICE);
-	if (uTransferVariable.l != XST_SUCCESS)
-	{
-		if (Demo.u8Verbose)
-			xil_printf("\n fail @ xmit; ERROR: %d", uTransferVariable.l);
-	}
-
-	if (Demo.u8Verbose)
-	{
-		xil_printf("\r\nwriteleds function done");
-	}
-}
 
 /*****************************************************************************/
 /**
@@ -160,6 +123,12 @@ int main(void)
 	//Xil_DCacheDisable();
 
 	xil_printf("\r\n--- Entering main() --- \r\n");
+
+	Status = init_vis();
+	if(Status != XST_SUCCESS) {
+		xil_printf("Error initializing visualizer");
+		return XST_FAILURE;
+	}
 
 	//
 	//Initialize the interrupt controller
@@ -227,8 +196,6 @@ int main(void)
 	// Make sure all driver instances using interrupts are initialized first
 	fnEnableInterrupts(&sIntc, &ivt[0], sizeof(ivt)/sizeof(ivt[0]));
 
-	memset((void *)MEM_BASE_ADDR, 0, NR_AUDIO_SAMPLES*2*4*20);
-
 	xil_printf("----------------------------------------------------------\r\n");
 	xil_printf("LED CONTROLLER\r\n");
 	xil_printf("----------------------------------------------------------\r\n");
@@ -276,14 +243,7 @@ int main(void)
 				case 'u':
 				{
 					/* write some data */
-					int numpix = NUM_LED_CHANNELS * 256;
-
-					uint32_t *ptr = (uint32_t *)MEM_BASE_ADDR;
-					for(int i=0; i<numpix; i++){
-						*ptr++ = color(150, 0, i);
-					}
-
-					writeLeds((uint32_t *)MEM_BASE_ADDR, numpix);
+					testLeds();
 					break;
 				}
 				case 'd':
@@ -297,14 +257,6 @@ int main(void)
 				case 'l':
 				{
 					/* write some data */
-					int numpix = NUM_LED_CHANNELS * 256;
-
-					uint32_t *ptr = (uint32_t *)MEM_BASE_ADDR;
-					for(int i=0; i<numpix; i++){
-						*ptr++ = color(0, i, 150);
-					}
-
-					writeLeds((uint32_t *)MEM_BASE_ADDR, numpix);
 					break;
 				}
 				default:
@@ -326,3 +278,12 @@ int main(void)
 
 }
 
+/* for our Ne10 */
+void *pvPortMalloc(size_t size)
+{
+	return malloc(size);
+}
+
+void vPortFree(void *p){
+	free(p);
+}

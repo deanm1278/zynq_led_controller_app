@@ -7,6 +7,7 @@
 
 #include "dma.h"
 #include "../demo.h"
+#include "../vis.h"
 
 /*
  * Buffer and Buffer Descriptor related constant definition
@@ -21,6 +22,8 @@
 #define DELAY_TIMER_COUNT		100
 
 /************************** Variable Definitions *****************************/
+
+uint32_t audioRxBuf[4*NR_AUDIO_SAMPLES];
 
 extern volatile sDemo_t Demo;
 
@@ -94,7 +97,8 @@ void fnS2MMInterruptHandler (void *CallbackRef)
 			uint32_t *addr = (uint32_t *)XAxiDma_BdGetBufAddr(BdPtr);
 			Xil_DCacheFlushRange((u32) addr, NR_AUDIO_SAMPLES*sizeof(uint32_t));
 
-			/* TODO: process the audio */
+			/* process the audio */
+			visualizer(addr);
 		}
 
 		Demo.fDmaS2MMEvent = 1;
@@ -311,7 +315,8 @@ int RxSetup(XAxiDma * AxiDmaInstPtr)
 	}
 
 	BdCurPtr = BdPtr;
-	RxBufferPtr = RX_BUFFER_BASE;
+	RxBufferPtr = (u32)audioRxBuf;
+	memset((void *)RxBufferPtr, 0, NR_AUDIO_SAMPLES*4*sizeof(uint32_t));
 
 	for (Index = 0; Index < FreeBdCount; Index++) {
 
