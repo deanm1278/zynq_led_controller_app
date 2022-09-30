@@ -188,6 +188,7 @@ XStatus fnAudioReadFromReg(u8 u8RegAddr, u8 *u8RxData);
 //XStatus fnAudioPllConfig();
 XStatus fnAudioStartupConfig ();
 XStatus fnInitAudio();
+void fnAudioReset();
 void fnAudioRecord(XAxiDma *AxiDma, u32 u32NrSamples);
 void fnAudioPlay(XAxiDma AxiDma, u32 u32NrSamples);
 void fnSetLineInput();

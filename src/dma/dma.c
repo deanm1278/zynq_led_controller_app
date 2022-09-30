@@ -154,6 +154,25 @@ void fnMM2SInterruptHandler (void *Callback)
 	}
 }
 
+void fnResetDma(XAxiDma *AxiDma)
+{
+	XAxiDma_Reset(AxiDma);
+	int TimeOut = 1000;
+	while (TimeOut)
+	{
+		if(XAxiDma_ResetIsDone(AxiDma))
+		{
+			break;
+		}
+		TimeOut -= 1;
+	}
+
+	XStatus Status = fnConfigDma(AxiDma);
+	if(Status != XST_SUCCESS) {
+		xil_printf("DMA configuration ERROR");
+	}
+}
+
 /******************************************************************************
  * Function to configure the DMA in Interrupt mode, this implies that the scatter
  * gather function is disabled. Prior to calling this function, the user must

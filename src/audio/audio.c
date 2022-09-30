@@ -326,6 +326,44 @@ XStatus fnAudioStartupConfig ()
 	return XST_SUCCESS;
 }
 
+void fnAudioReset()
+{
+	union ubitField uConfigurationVariable;
+
+	/* reset */
+	uConfigurationVariable.l = 0;
+	uConfigurationVariable.bit.u32bit0 = 1;
+	Xil_Out32(I2S_RESET_REG, uConfigurationVariable.l);
+
+	uConfigurationVariable.bit.u32bit0 = 0;
+	Xil_Out32(I2S_RESET_REG, uConfigurationVariable.l);
+
+	uConfigurationVariable.l = Xil_In32(I2S_FIFO_CONTROL_REG);
+	uConfigurationVariable.bit.u32bit31 = 1;
+	Xil_Out32(I2S_FIFO_CONTROL_REG, uConfigurationVariable.l);
+	uConfigurationVariable.bit.u32bit31 = 0;
+	Xil_Out32(I2S_FIFO_CONTROL_REG, uConfigurationVariable.l);
+
+	/* redo init */
+
+	// Configure the I2S controller for generating a valid sampling rate
+	uConfigurationVariable.l = Xil_In32(I2S_CLOCK_CONTROL_REG);
+	uConfigurationVariable.bit.u32bit0 = 1;
+	uConfigurationVariable.bit.u32bit1 = 0;
+	uConfigurationVariable.bit.u32bit2 = 1;
+	Xil_Out32(I2S_CLOCK_CONTROL_REG, uConfigurationVariable.l);
+
+	uConfigurationVariable.l = 0x00000000;
+
+	//STOP_TRANSACTION
+	uConfigurationVariable.bit.u32bit1 = 1;
+	Xil_Out32(I2S_TRANSFER_CONTROL_REG, uConfigurationVariable.l);
+
+	//STOP_TRANSACTION
+	uConfigurationVariable.bit.u32bit1 = 0;
+	Xil_Out32(I2S_TRANSFER_CONTROL_REG, uConfigurationVariable.l);
+}
+
 /******************************************************************************
  * Initialize PLL and Audio controller over the I2C bus
  *

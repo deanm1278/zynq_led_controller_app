@@ -75,6 +75,8 @@ XAxiDma sAxiDma1;
 static XGpio sUserIO;
 static XScuGic sIntc;
 
+#define WDG_LIMIT 0x0FFFFFF
+
 //
 // Interrupt vector table
 const ivt_t ivt[] = {
@@ -206,16 +208,33 @@ int main(void)
 
     //main loop
 
+	uint32_t wdgCnt = 0;
     while(1) {
+
+    	if(Demo.fAudioRecord == 1){
+    		wdgCnt++;
+    	}
+    	else{
+    		wdgCnt = 0;
+    	}
+
+    	if(wdgCnt > WDG_LIMIT && Demo.fAudioRecord == 1){
+    		/* reset the audio */
+    		fnResetDma(&sAxiDma);
+    		fnAudioReset();
+
+    		fnAudioRecord(&sAxiDma,NR_AUDIO_SAMPLES);
+    		wdgCnt = 0;
+    	}
 
 		// Checking the DMA S2MM event flag
 		if (Demo.fDmaS2MMEvent)
 		{
 			xil_printf("\r\nRecording Done...");
+			wdgCnt = 0;
 
 			// Reset S2MM event and record flag
 			Demo.fDmaS2MMEvent = 0;
-			Demo.fAudioRecord = 0;
 		}
 
 		// Checking the DMA MM2S event flag

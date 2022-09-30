@@ -21,5 +21,6 @@ void fnS2MMInterruptHandler (void *Callback);
 void fnMM2SInterruptHandler (void *Callback);
 XStatus fnConfigDma(XAxiDma *AxiDma);
 XStatus fnConfigDma1(XAxiDma *AxiDma);
+void fnResetDma(XAxiDma *AxiDma);
 
 #endif /* DMA_H_ */
