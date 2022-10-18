@@ -12,13 +12,19 @@
 
 #define FREQ_S 24000.0f
 
-#define NFFT 2048UL
+#define NFFT 4096UL
 
 #define NUM_SAMPLES NR_AUDIO_SAMPLES
 
 #define INSAMPS (NUM_SAMPLES/2)
 
 #define FRAMERATE (FREQ_S/INSAMPS)
+
+#define MEL_SCALING 1.0f
+
+#define FEATHER_MAX 5
+
+const float featherTable[FEATHER_MAX] = { 4.0f, 1.0f, 0.5f, 0.2f, 0.05f };
 
 /************************** Constant Definitions *****************************/
 #define NUM_LED_PER_CHANNEL (60*5-2)
@@ -61,7 +67,12 @@ static inline point mkpoint(float x, float y){
 	return p;
 }
 
-Color_t color(int r, int g, int b){
+Color_t color(uint32_t r, uint32_t g, uint32_t b){
+	/* saturate */
+	r = (r < 0xFF ? r : 0xFF);
+	g = (g < 0xFF ? g : 0xFF);
+	b = (b < 0xFF ? b : 0xFF);
+
 	return RED(r) | GREEN(g) | BLUE(b);
 }
 
@@ -88,6 +99,13 @@ float mag[NFFT/2];
 
 float *inptr;
 float *fftinptr;
+
+float fbands[WIDTH];
+
+const int binstart[WIDTH + 1] = {
+		11,	28,	46,	68,	91,	118,	148,	182,	221,	264,	313,	368,	430,
+		500,	579,	668,	768,	881,	1008,	1152,	1314
+};
 
 int maskH[WIDTH];
 int maskL[WIDTH];
@@ -243,19 +261,38 @@ void visualizer(uint32_t *data){
 	/* calculate magnitudes */
 	ne10_len_vec2f(mag, (ne10_vec2f_t*)fftOutput, NFFT/2);
 
+	memset(fbands, 0, sizeof(fbands));
+
+	for(int i=0; i < WIDTH; i++){
+		float v = 0;
+		int per = binstart[i+1] - binstart[i];
+		float inc = 1.0f / per;
+
+		/* triangle */
+		for(int j=0; j<per; j++){
+			fbands[i] += (mag[binstart[i] + j] * v + mag[binstart[i + 1] + j] * (1.0f - v));
+			v += inc;
+		}
+
+		int offset = 15 + roundf(fbands[i] * MEL_SCALING);
+
+		/* set the mask based on the mel band */
+		maskH[i] = (HEIGHT >> 1) + offset;
+		maskL[i] = (HEIGHT >> 1) - offset;
+
+		/* constrain */
+		maskH[i] = (maskH[i] > HEIGHT ? HEIGHT : maskH[i]);
+		maskL[i] = (maskL[i] < 0 ? 0 : maskL[i]);
+	}
+
 	/* TODO: make nice leds */
 	memset(pixels, 0, sizeof(pixels));
 
 	theta = theta + phaseInc;
 	if(theta >= 2.0f*PI){ theta -= 2.0f*PI; }
 
-	for(int i=0; i<WIDTH; i++){
-		maskH[i] = 90;
-		maskL[i] = 30;
-	}
-
-	Color_t color0 = color(150, 0, 0);
-	Color_t color1 = color(0, 0, 150);
+	Color_t color0 = color(64, 0, 0);
+	Color_t color1 = color(0, 0, 64);
 	for(int i=0; i<NUM_LEDS; i++){
 	    int xraw = (i % WIDTH);
 	    int yraw = floorf((float)i/(float)WIDTH);
@@ -277,22 +314,26 @@ void visualizer(uint32_t *data){
 	    pixels[i] = c;
 
 	    /* apply a feathery glow effect when we are outside the mask */
-	    if(yraw < maskL[xraw] || yraw > maskH[xraw]){
-#if 1
-	    	pixels[i] = 0;
-#else
-	    	float diff = 0;
-			if(yraw < maskL[xraw]){
-				diff = feather / (maskL[xraw] - yraw);
-			}
-			else{
-				diff = feather / (yraw - maskH[xraw]);
-			}
-			diff = min(diff, 2.0f);
-			pixels[i] = color(red(pixels[i])*diff, green(pixels[i])*diff, blue(pixels[i])*diff);
-#endif
-	    }
+	    int difl = maskL[xraw] - yraw;
+	    int difh = yraw - maskH[xraw];
 
+	    if(difh >= FEATHER_MAX || difl >= FEATHER_MAX){
+			pixels[i] = 0;
+		}
+	    else{
+			int difraw = 0;
+			if(difl > 0 && difl < FEATHER_MAX){
+				difraw = difl;
+			}
+			else if(difh > 0 && difh < FEATHER_MAX){
+				difraw = difh;
+			}
+
+			if(difraw > 0){
+				float diff = featherTable[difraw - 1];
+				pixels[i] = color(REDC(pixels[i])*diff, GREENC(pixels[i])*diff, BLUEC(pixels[i])*diff);
+			}
+	    }
 	}
 
 
