@@ -24,7 +24,19 @@
 
 #define FEATHER_MAX 5
 
-const float featherTable[FEATHER_MAX] = { 4.0f, 1.0f, 0.5f, 0.2f, 0.05f };
+#define CENTER_OFFSET 5
+
+const float featherTable[FEATHER_MAX+2] = { 1.0f, 4.0f, 1.0f, 0.5f, 0.2f, 0.05f, 0 };
+
+#define NUM_PISTONS 6
+
+const float LMax = 0.12f;
+const float LMin = 0.02f;
+
+const float rMax = 0.05f;
+
+const float incMax = 4.0f;
+const float incMin = 2.3f;
 
 /************************** Constant Definitions *****************************/
 #define NUM_LED_PER_CHANNEL (60*5-2)
@@ -76,6 +88,13 @@ Color_t color(uint32_t r, uint32_t g, uint32_t b){
 	return RED(r) | GREEN(g) | BLUE(b);
 }
 
+typedef struct _piston {
+	float L;
+	float r;
+	float inc;
+	float theta;
+} piston;
+
 ne10_fft_r2c_cfg_float32_t cfg;
 
 uint32_t pixels[NUM_LEDS];
@@ -107,12 +126,15 @@ const int binstart[WIDTH + 1] = {
 		500,	579,	668,	768,	881,	1008,	1152,	1314
 };
 
-int maskH[WIDTH];
-int maskL[WIDTH];
+float maskH[WIDTH];
+float maskL[WIDTH];
 
 float theta = 0;
 
 float phaseInc = W(10.0f);
+
+piston pistonsH[NUM_PISTONS];
+piston pistonsL[NUM_PISTONS];
 
 /*
  * 0 	1 		2 		3 		...		xn-1
@@ -142,6 +164,23 @@ static void hann(float *p, int N) {
     for (int i = 0; i < N; i++) {
         p[i] = 0.5f * (1.0f - cosf(2.0f * PI * i / (N - 1)));
     }
+}
+
+static float randrange(float _min, float _max){
+	return (float)(rand() % 1000)/1000.0f * (_max - _min) + _min;
+}
+
+void piston_init(piston *s){
+    s->L = randrange(LMin, LMax);
+    s->r = randrange(0, rMax);
+    s->inc = W(randrange(incMin, incMax));
+    s->theta = randrange(0, 2*PI);
+}
+
+float piston_run(piston *s){
+    s->theta = s->theta + s->inc;
+    if(s->theta >= 2.0f * PI) { s->theta -= 2.0f * PI; }
+    return s->r*cosf(s->theta) + sqrtf(s->L*s->L - s->r*s->r*powf(sinf(s->theta), 2.0f));
 }
 
 static void writeLeds(uint32_t *addr, uint32_t numpix)
@@ -194,6 +233,11 @@ XStatus init_vis(void)
 
 	inptr = inbuf + NFFT - INSAMPS;
 	fftinptr = inbuf;
+
+	for(int i=0; i<NUM_PISTONS; i++){
+		piston_init(&pistonsL[i]);
+		piston_init(&pistonsH[i]);
+	}
 
 	return XST_SUCCESS;
 }
@@ -261,6 +305,44 @@ void visualizer(uint32_t *data){
 	/* calculate magnitudes */
 	ne10_len_vec2f(mag, (ne10_vec2f_t*)fftOutput, NFFT/2);
 
+	/* run all the pistons */
+	const float xinc = (float)WIDTH / (float)(NUM_PISTONS - 1);
+	float pnL[NUM_PISTONS];
+	float pnH[NUM_PISTONS];
+	for(int i=0; i<NUM_PISTONS; i++){
+		pnL[i] = piston_run(&pistonsL[i]);
+		pnH[i] = piston_run(&pistonsH[i]);
+	}
+
+	/* interpolate the wave */
+	float interpPointsL[4];
+	float interpPointsH[4];
+	for(int i=0; i<WIDTH; i++){
+		int pindex = i/xinc;
+
+		int k=pindex-1;
+		float valL, valH;
+		for(int j=0; j<4; j++){
+			if(k<0 || (k > NUM_PISTONS - 1)){
+				valL = 0;
+				valH = 0;
+			}
+			else{
+				valL = pnL[k];
+				valH = pnH[k];
+			}
+			interpPointsL[j] = valL;
+			interpPointsH[j] = valH;
+			k++;
+		}
+
+		valL = cubicInterp(interpPointsL, fmodf(i, xinc)/xinc);
+		maskL[i] = (HEIGHT >> 1) - (CENTER_OFFSET + valL*HEIGHT);
+
+		valH = cubicInterp(interpPointsH, fmodf(i, xinc)/xinc);
+		maskH[i] = (HEIGHT >> 1) + (CENTER_OFFSET + valH*HEIGHT);
+	}
+
 	memset(fbands, 0, sizeof(fbands));
 
 	for(int i=0; i < WIDTH; i++){
@@ -274,11 +356,11 @@ void visualizer(uint32_t *data){
 			v += inc;
 		}
 
-		int offset = 15 + roundf(fbands[i] * MEL_SCALING);
+		float offset = fbands[i] * MEL_SCALING;
 
 		/* set the mask based on the mel band */
-		maskH[i] = (HEIGHT >> 1) + offset;
-		maskL[i] = (HEIGHT >> 1) - offset;
+		maskH[i] += offset;
+		maskL[i] -= offset;
 
 		/* constrain */
 		maskH[i] = (maskH[i] > HEIGHT ? HEIGHT : maskH[i]);
@@ -291,8 +373,8 @@ void visualizer(uint32_t *data){
 	theta = theta + phaseInc;
 	if(theta >= 2.0f*PI){ theta -= 2.0f*PI; }
 
-	Color_t color0 = color(64, 0, 0);
-	Color_t color1 = color(0, 0, 64);
+	Color_t color0 = color(100, 2, 20);
+	Color_t color1 = color(10, 2, 80);
 	for(int i=0; i<NUM_LEDS; i++){
 	    int xraw = (i % WIDTH);
 	    int yraw = floorf((float)i/(float)WIDTH);
@@ -314,14 +396,14 @@ void visualizer(uint32_t *data){
 	    pixels[i] = c;
 
 	    /* apply a feathery glow effect when we are outside the mask */
-	    int difl = maskL[xraw] - yraw;
-	    int difh = yraw - maskH[xraw];
+	    float difl = maskL[xraw] - yraw;
+	    float difh = yraw - maskH[xraw];
 
 	    if(difh >= FEATHER_MAX || difl >= FEATHER_MAX){
 			pixels[i] = 0;
 		}
 	    else{
-			int difraw = 0;
+			float difraw = 0;
 			if(difl > 0 && difl < FEATHER_MAX){
 				difraw = difl;
 			}
@@ -330,7 +412,12 @@ void visualizer(uint32_t *data){
 			}
 
 			if(difraw > 0){
-				float diff = featherTable[difraw - 1];
+				float x0 = featherTable[(int)floorf(difraw)];
+				float x1 = featherTable[(int)ceilf(difraw)];
+				float frac = difraw - floorf(difraw);
+
+				float diff = frac*x1 + (1-frac)*x0;
+
 				pixels[i] = color(REDC(pixels[i])*diff, GREENC(pixels[i])*diff, BLUEC(pixels[i])*diff);
 			}
 	    }
