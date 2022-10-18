@@ -208,6 +208,8 @@ int main(void)
 
     //main loop
 
+	testLeds();
+
 	uint32_t wdgCnt = 0;
     while(1) {
 

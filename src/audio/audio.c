@@ -235,8 +235,8 @@ XStatus fnAudioStartupConfig ()
 	// Configure the I2S controller for generating a valid sampling rate
 	uConfigurationVariable.l = Xil_In32(I2S_CLOCK_CONTROL_REG);
 	uConfigurationVariable.bit.u32bit0 = 1;
-	uConfigurationVariable.bit.u32bit1 = 0;
-	uConfigurationVariable.bit.u32bit2 = 1;
+	uConfigurationVariable.bit.u32bit1 = 1;
+	uConfigurationVariable.bit.u32bit2 = 0;
 	Xil_Out32(I2S_CLOCK_CONTROL_REG, uConfigurationVariable.l);
 
 	uConfigurationVariable.l = 0x00000000;
@@ -317,7 +317,8 @@ XStatus fnAudioStartupConfig ()
 	}
 	fnAudioWriteToReg(R5_DIGITAL_PATH, 0b000000000);
 	fnAudioWriteToReg(R7_DIGITAL_IF, 0b000001010);
-	fnAudioWriteToReg(R8_SAMPLE_RATE, 0b000000000);
+	//fnAudioWriteToReg(R8_SAMPLE_RATE, 0b000000000); /* 28 khz */
+	fnAudioWriteToReg(R8_SAMPLE_RATE, 0b000111000); /* 24 khz */
 	usleep(1000);
 	fnAudioWriteToReg(R9_ACTIVE, 0b000000001);
 	fnAudioWriteToReg(R6_POWER_MGMT, 0b000100000);
@@ -349,8 +350,8 @@ void fnAudioReset()
 	// Configure the I2S controller for generating a valid sampling rate
 	uConfigurationVariable.l = Xil_In32(I2S_CLOCK_CONTROL_REG);
 	uConfigurationVariable.bit.u32bit0 = 1;
-	uConfigurationVariable.bit.u32bit1 = 0;
-	uConfigurationVariable.bit.u32bit2 = 1;
+	uConfigurationVariable.bit.u32bit1 = 1;
+	uConfigurationVariable.bit.u32bit2 = 0;
 	Xil_Out32(I2S_CLOCK_CONTROL_REG, uConfigurationVariable.l);
 
 	uConfigurationVariable.l = 0x00000000;

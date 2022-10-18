@@ -13,7 +13,7 @@
     <AddressSpace Name="system_i_processing_system7_0.system_i_axi_bram_ctrl_1" Begin="1107296256" End="1107300351">
       <AddressSpaceRange Name="system_i_processing_system7_0.system_i_axi_bram_ctrl_1" Begin="1107296256" End="1107300351" CoreMemory_Width="0" MemoryType="RAM_SP" MemoryConfiguration="">
         <BusBlock>
-          <BitLane MemType="RAMB36" Placement="X1Y6" Read_Width="0">
+          <BitLane MemType="RAMB36" Placement="X0Y6" Read_Width="0">
             <DataWidth MSB="31" LSB="0"/>
             <AddressRange Begin="0" End="1023"/>
             <BitLayout pattern=""/>

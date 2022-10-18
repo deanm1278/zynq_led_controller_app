@@ -45,7 +45,7 @@
 #define DDR_BASE_ADDR       XPAR_PS7_DDR_0_S_AXI_BASEADDR
 
 /* total number of samples (divide by 2 for stereo samples) */
-#define NR_AUDIO_SAMPLES	1024
+#define NR_AUDIO_SAMPLES	512
 
 #define RX_BD_SPACE_BASE	(XPAR_BRAM_0_BASEADDR)
 #define RX_BD_SPACE_HIGH	(XPAR_BRAM_0_BASEADDR + 0x00000FF)
