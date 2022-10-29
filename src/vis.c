@@ -20,8 +20,6 @@
 
 #define FRAMERATE (FREQ_S/INSAMPS)
 
-#define MEL_SCALING 1.0f
-
 #define FEATHER_MAX 5
 
 #define CENTER_OFFSET 5
@@ -29,6 +27,15 @@
 const float featherTable[FEATHER_MAX+2] = { 1.0f, 4.0f, 1.0f, 0.5f, 0.2f, 0.05f, 0 };
 
 #define NUM_PISTONS 6
+
+#define MAX_SPARKLES 50
+
+#define SPARKLE_BRIGHTNESS 150
+
+#define SPARKLE_CHANCE_BASE 6
+#define SPARKLE_CHANCE_K	0.99f
+
+#define SPARKLES_PER_CYCLE 2
 
 const float LMax = 0.12f;
 const float LMin = 0.02f;
@@ -88,12 +95,32 @@ Color_t color(uint32_t r, uint32_t g, uint32_t b){
 	return RED(r) | GREEN(g) | BLUE(b);
 }
 
+__attribute__((optimize("Ofast")))
+static inline Color_t color_add(Color_t c, uint32_t r, uint32_t g, uint32_t b){
+	/* saturate */
+	r += REDC(c);
+	g += GREENC(c);
+	b += BLUEC(c);
+
+	r = (r < 0xFF ? r : 0xFF);
+	g = (g < 0xFF ? g : 0xFF);
+	b = (b < 0xFF ? b : 0xFF);
+
+	return RED(r) | GREEN(g) | BLUE(b);
+}
+
 typedef struct _piston {
 	float L;
 	float r;
 	float inc;
 	float theta;
 } piston;
+
+typedef struct _sparkle {
+	int px;
+	int v;
+	int k;
+} sparkle;
 
 ne10_fft_r2c_cfg_float32_t cfg;
 
@@ -135,6 +162,17 @@ float phaseInc = W(10.0f);
 
 piston pistonsH[NUM_PISTONS];
 piston pistonsL[NUM_PISTONS];
+
+sparkle sparkles[MAX_SPARKLES];
+
+float melScaling = 1.0f;
+
+float sparkleChance = SPARKLE_CHANCE_BASE;
+
+Color_t color0;
+Color_t color1;
+
+extern volatile bool ledsOn;
 
 /*
  * 0 	1 		2 		3 		...		xn-1
@@ -212,6 +250,20 @@ void testLeds(void){
 	writeLeds(ledbuf, NUM_LEDS);
 }
 
+void randomizeColors(void){
+	const int cmax = 120;
+
+	int r = rand() % cmax;
+	int g = rand() % cmax;
+	int b = rand() % cmax;
+	color0 = color(r, g, b);
+
+	r = rand() % cmax;
+	g = rand() % cmax;
+	b = rand() % cmax;
+	color1 = color(r, g, b);
+}
+
 XStatus init_vis(void)
 {
 	if (ne10_init() != NE10_OK)
@@ -238,6 +290,11 @@ XStatus init_vis(void)
 		piston_init(&pistonsL[i]);
 		piston_init(&pistonsH[i]);
 	}
+
+	memset(sparkles, 0, sizeof(sparkles));
+
+	color0 = color(100, 2, 20);
+	color1 = color(10, 2, 80);
 
 	return XST_SUCCESS;
 }
@@ -356,7 +413,7 @@ void visualizer(uint32_t *data){
 			v += inc;
 		}
 
-		float offset = fbands[i] * MEL_SCALING;
+		float offset = fbands[i] * melScaling;
 
 		/* set the mask based on the mel band */
 		maskH[i] += offset;
@@ -373,8 +430,6 @@ void visualizer(uint32_t *data){
 	theta = theta + phaseInc;
 	if(theta >= 2.0f*PI){ theta -= 2.0f*PI; }
 
-	Color_t color0 = color(100, 2, 20);
-	Color_t color1 = color(10, 2, 80);
 	for(int i=0; i<NUM_LEDS; i++){
 	    int xraw = (i % WIDTH);
 	    int yraw = floorf((float)i/(float)WIDTH);
@@ -423,8 +478,40 @@ void visualizer(uint32_t *data){
 	    }
 	}
 
+	/* run the sparkles */
+	float pk = fbands[WIDTH-1] * 1.5;
+	if(pk > sparkleChance){ sparkleChance = pk; }
+	sparkleChance = sparkleChance * SPARKLE_CHANCE_K + SPARKLE_CHANCE_BASE * (1.0f - SPARKLE_CHANCE_K);
+
+	for(int k = 0; k < SPARKLES_PER_CYCLE; k++){
+		bool roll = ((rand() % 100) < (int)sparkleChance);
+		if(roll){
+			/* make a new sparkle if we need to */
+			for(int i=0; i<MAX_SPARKLES; i++){
+				if(sparkles[i].v == 0){
+					sparkles[i].v = SPARKLE_BRIGHTNESS;
+					sparkles[i].px = rand() % NUM_LEDS;
+					sparkles[i].k = (rand() % 10) + 1;
+					break;
+				}
+			}
+		}
+	}
+
+	for(int i=0; i<MAX_SPARKLES; i++){
+		if(sparkles[i].v > 0){
+			pixels[sparkles[i].px] = color_add(pixels[sparkles[i].px], sparkles[i].v, sparkles[i].v, sparkles[i].v);
+			sparkles[i].v -= sparkles[i].k;
+			sparkles[i].v = (sparkles[i].v < 0 ? 0 : sparkles[i].v);
+		}
+	}
 
 	/* send leds */
-	translate(ledbuf, pixels);
+	if(!ledsOn){
+		memset(ledbuf, 0, sizeof(ledbuf));
+	}
+	else {
+		translate(ledbuf, pixels);
+	}
 	writeLeds(ledbuf, NUM_LEDS);
 }

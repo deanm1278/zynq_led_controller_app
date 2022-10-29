@@ -10,6 +10,7 @@
 
 XStatus init_vis(void);
 void testLeds(void);
+void randomizeColors(void);
 
 void visualizer(uint32_t *data);
 

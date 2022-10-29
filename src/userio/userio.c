@@ -56,6 +56,7 @@
 #include "../demo.h"
 
 #define USERIO_DEVICE_ID 	0
+#define SWITCHES_DEVICE_ID 	1
 
 extern volatile sDemo_t Demo;
 
@@ -87,6 +88,27 @@ XStatus fnInitUserIO(XGpio *psGpio)
 	 */
 	XGpio_InterruptEnable(psGpio, BTN_SW_INTERRUPT);
 	XGpio_InterruptGlobalEnable(psGpio);
+
+	return XST_SUCCESS;
+}
+
+XStatus fnInitSwitches(XGpio *psGpio)
+{
+	/* Initialize the GPIO driver. If an error occurs then exit */
+	RETURN_ON_FAILURE(XGpio_Initialize(psGpio, SWITCHES_DEVICE_ID));
+
+	/*
+	 * Perform a self-test on the GPIO.  This is a minimal test and only
+	 * verifies that there is not any bus error when reading the data
+	 * register
+	 */
+	RETURN_ON_FAILURE(XGpio_SelfTest(psGpio));
+
+	/*
+	 * Setup direction register so the switches and buttons are inputs and the LED is
+	 * an output of the GPIO
+	 */
+	XGpio_SetDataDirection(psGpio, 1, 0xF);
 
 	return XST_SUCCESS;
 }

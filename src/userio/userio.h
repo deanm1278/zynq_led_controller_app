@@ -57,7 +57,6 @@
 #include "xgpio.h"
 
 #define BTN_SW_CHANNEL	 1	/* Channel 1 of the GPIO Device */
-#define LED_CHANNEL	 2	/* Channel 2 of the GPIO Device */
 #define BTN_SW_INTERRUPT XGPIO_IR_CH1_MASK  /* Channel 1 Interrupt Mask */
 
 #define BTNU_MASK 	0x0002
@@ -73,6 +72,7 @@
 #define RETURN_ON_FAILURE(x) if ((x) != XST_SUCCESS) return XST_FAILURE;
 
 XStatus fnInitUserIO(XGpio *psGpio);
+XStatus fnInitSwitches(XGpio *psGpio);
 void fnUserIOIsr(void *pvInst);
 
 #endif /* USERIO_H_ */

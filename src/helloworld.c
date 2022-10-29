@@ -27,6 +27,7 @@
 
 #include "demo.h"
 
+#include <stdbool.h>
 #include "audio/audio.h"
 #include "dma/dma.h"
 #include "intc/intc.h"
@@ -73,9 +74,14 @@ static XIic sIic;
 static XAxiDma sAxiDma;		/* Instance of the XAxiDma */
 XAxiDma sAxiDma1;
 static XGpio sUserIO;
+static XGpio sSwitches;
 static XScuGic sIntc;
 
 #define WDG_LIMIT 0x0FFFFFF
+
+volatile bool ledsOn = false;
+
+extern float melScaling;
 
 //
 // Interrupt vector table
@@ -156,6 +162,12 @@ int main(void)
     	return XST_FAILURE;
     }
 
+    Status = fnInitSwitches(&sSwitches);
+    if(Status != XST_SUCCESS) {
+    	xil_printf("Switches init ERROR");
+    	return XST_FAILURE;
+    }
+
 
 	//Initialize DMA
 	Status = fnConfigDma(&sAxiDma);
@@ -208,10 +220,18 @@ int main(void)
 
     //main loop
 
-	testLeds();
+	//testLeds();
+	xil_printf("\r\nStart Recording...\r\n");
+	fnSetLineInput();
+	fnAudioRecord(&sAxiDma,NR_AUDIO_SAMPLES);
+	Demo.fAudioRecord = 1;
 
 	uint32_t wdgCnt = 0;
     while(1) {
+
+    	/* read switch */
+    	int swstates = XGpio_DiscreteRead(&sSwitches, 1);
+    	ledsOn = swstates & 0x1;
 
     	if(Demo.fAudioRecord == 1){
     		wdgCnt++;
@@ -232,7 +252,7 @@ int main(void)
 		// Checking the DMA S2MM event flag
 		if (Demo.fDmaS2MMEvent)
 		{
-			xil_printf("\r\nRecording Done...");
+			//xil_printf("\r\nRecording Done...");
 			wdgCnt = 0;
 
 			// Reset S2MM event and record flag
@@ -242,7 +262,7 @@ int main(void)
 		// Checking the DMA MM2S event flag
 		if (Demo.fDmaMM2SEvent)
 		{
-			xil_printf("\r\nsend leds Done...");
+			//xil_printf("\r\nsend leds Done...");
 			Demo.fDmaMM2SEvent = 0;
 		}
 
@@ -263,17 +283,14 @@ int main(void)
 			switch(Demo.chBtn) {
 				case 'u':
 				{
-					/* write some data */
-					testLeds();
+					melScaling += 0.1f;
+					if(melScaling > 1.0f){ melScaling = 0.1f; }
 					break;
 				}
 				case 'd':
 					break;
 				case 'r':
-					xil_printf("\r\nStart Recording...\r\n");
-					fnSetLineInput();
-					fnAudioRecord(&sAxiDma,NR_AUDIO_SAMPLES);
-					Demo.fAudioRecord = 1;
+					randomizeColors();
 					break;
 				case 'l':
 				{
